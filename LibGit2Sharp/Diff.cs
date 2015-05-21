@@ -522,7 +522,8 @@ namespace LibGit2Sharp
             DiffModifiers diffOptions, IEnumerable<string> paths, ExplicitPathsOptions explicitPathsOptions,
             CompareOptions compareOptions)
         {
-            var matchedPaths = new MatchedPathsAggregator();
+            //Turn off unmatched callbacks if there not needed
+            var matchedPaths = explicitPathsOptions != null ? new MatchedPathsAggregator() : null;
             var filePaths = repo.ToFilePaths(paths);
 
             using (GitDiffOptions options = BuildOptions(diffOptions, filePaths, matchedPaths, compareOptions))
