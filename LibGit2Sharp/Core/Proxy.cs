@@ -717,6 +717,17 @@ namespace LibGit2Sharp.Core
             Ensure.ZeroResult(res);
         }
 
+        public static void git_diff_foreach2(
+            DiffSafeHandle diff,
+            NativeMethods.git_diff_file_cb2 fileCallback)
+        {
+            using (ThreadAffinity())
+            {
+                int res = NativeMethods.git_diff_foreach2(diff, fileCallback, null, null, IntPtr.Zero);
+                Ensure.ZeroResult(res);
+            }
+        }
+
         public static DiffSafeHandle git_diff_tree_to_index(
             RepositorySafeHandle repo,
             IndexSafeHandle index,

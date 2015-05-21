@@ -167,6 +167,8 @@
     <Compile Include="LogLevel.cs" />
     <Compile Include="SubmoduleRecurse.cs" />
     <Compile Include="SubmoduleUpdateOptions.cs" />
+    <Compile Include="LazyTreeChanges.cs" />
+    <Compile Include="LazyTreeEntryChanges.cs" />
     <Compile Include="UnbornBranchException.cs" />
     <Compile Include="LockedFileException.cs" />
     <Compile Include="Core\GitRepositoryInitOptions.cs" />

@@ -463,6 +463,11 @@ namespace LibGit2Sharp.Core
             float progress,
             IntPtr payload);
 
+        internal delegate int git_diff_file_cb2(
+            IntPtr delta,
+            float progress,
+            IntPtr payload);
+
         internal delegate int git_diff_hunk_cb(
             [In] GitDiffDelta delta,
             [In] GitDiffHunk hunk,
@@ -490,6 +495,14 @@ namespace LibGit2Sharp.Core
         internal static extern int git_diff_foreach(
             DiffSafeHandle diff,
             git_diff_file_cb fileCallback,
+            git_diff_hunk_cb hunkCallback,
+            git_diff_line_cb lineCallback,
+            IntPtr payload);
+
+        [DllImport(libgit2, EntryPoint = "git_diff_foreach")]
+        internal static extern int git_diff_foreach2(
+            DiffSafeHandle diff,
+            git_diff_file_cb2 fileCallback,
             git_diff_hunk_cb hunkCallback,
             git_diff_line_cb lineCallback,
             IntPtr payload);

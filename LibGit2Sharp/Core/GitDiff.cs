@@ -256,6 +256,27 @@ namespace LibGit2Sharp.Core
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct GitDiffDeltaUnsafe
+    {
+        public ChangeKind Status;
+        public GitDiffFlags Flags;
+        public UInt16 Similarity;
+        public UInt16 NumberOfFiles;
+        public GitDiffFileUnsafe OldFile;
+        public GitDiffFileUnsafe NewFile;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct GitDiffFileUnsafe
+    {
+        public fixed byte Id[20];
+        public IntPtr Path;
+        public Int64 Size;
+        public GitDiffFlags Flags;
+        public UInt16 Mode;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal class GitDiffHunk
     {
         public int OldStart;
