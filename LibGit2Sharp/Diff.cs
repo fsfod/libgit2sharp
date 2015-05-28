@@ -234,10 +234,18 @@ namespace LibGit2Sharp
                 }
             }
 
-            using (DiffSafeHandle diff = BuildDiffList(oldTreeId, newTreeId, comparer,
-                diffOptions, paths, explicitPathsOptions, compareOptions))
+            DiffSafeHandle diff = BuildDiffList(oldTreeId, newTreeId, comparer, diffOptions, paths, explicitPathsOptions, compareOptions);
+
+            if (typeof(IDisposable).IsAssignableFrom(typeof(T)))
             {
                 return (T)builder(diff);
+            }
+            else
+            {
+                using (diff)
+                {
+                    return (T)builder(diff);
+                }
             }
         }
 

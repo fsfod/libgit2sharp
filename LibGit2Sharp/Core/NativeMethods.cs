@@ -519,6 +519,9 @@ namespace LibGit2Sharp.Core
         internal static extern IntPtr git_diff_get_delta(DiffSafeHandle diff, UIntPtr idx);
 
         [DllImport(libgit2)]
+        internal static extern int git_diff_num_deltas_of_type(DiffSafeHandle diff, ChangeKind entryKind);
+
+        [DllImport(libgit2)]
         internal static extern int git_filter_register(
             [MarshalAs(UnmanagedType.CustomMarshaler, MarshalCookie = UniqueId.UniqueIdentifier, MarshalTypeRef = typeof(StrictUtf8Marshaler))] string name,
             IntPtr gitFilter, int priority);

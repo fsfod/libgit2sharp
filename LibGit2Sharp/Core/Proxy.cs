@@ -810,9 +810,14 @@ namespace LibGit2Sharp.Core
             return (int)NativeMethods.git_diff_num_deltas(diff);
         }
 
-        public static GitDiffDelta git_diff_get_delta(DiffSafeHandle diff, int idx)
+        public static int git_diff_num_deltas_of_type(DiffSafeHandle diff, ChangeKind entryKind)
         {
-            return NativeMethods.git_diff_get_delta(diff, (UIntPtr)idx).MarshalAs<GitDiffDelta>(false);
+            return (int)NativeMethods.git_diff_num_deltas_of_type(diff, entryKind);
+        }
+
+        public static IntPtr git_diff_get_delta(DiffSafeHandle diff, int idx)
+        {
+            return NativeMethods.git_diff_get_delta(diff, (UIntPtr) idx);
         }
 
         #endregion

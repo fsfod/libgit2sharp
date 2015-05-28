@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using LibGit2Sharp.Core;
+using System.Runtime.InteropServices;
+using System;
 
 namespace LibGit2Sharp
 {
@@ -8,77 +10,88 @@ namespace LibGit2Sharp
     /// Holds the changes between two versions of a tree entry.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
-    public class LazyTreeEntryChanges
+    public unsafe struct LazyTreeEntryChanges
     {
-       // private GitDiffDelta delta;
-
-        /// <summary>
-        /// Needed for mocking purposes.
-        /// </summary>
-        protected LazyTreeEntryChanges()
-        { }
+        private GitDiffDeltaUnsafe* delta;
 
         internal unsafe LazyTreeEntryChanges(GitDiffDeltaUnsafe* delta)
         {
-            Path = LaxUtf8Marshaler.FromNative(delta->NewFile.Path);
-
-            Mode = (Mode)delta->NewFile.Mode;
-            OldMode = (Mode)delta->OldFile.Mode;
-
-            //Check if we can skip 
-            if (delta->OldFile.Path != delta->NewFile.Path)
-            {
-                OldPath = LaxUtf8Marshaler.FromNative(delta->OldFile.Path);
-            }
-            else
-            {
-                OldPath = Path;
-            }
-
-            if (delta->Status == ChangeKind.Untracked || delta->Status == ChangeKind.Ignored)
-            {
-                Status = ChangeKind.Added;
-            }
-            else
-            {
-                Status = delta->Status;
-            }
+            this.delta = delta;
         }
+
+        /// <summary>
+        /// The new Size.
+        /// </summary>
+        public long Size => delta->NewFile.Size;
 
         /// <summary>
         /// The new path.
         /// </summary>
-        public string Path { get; }
+        public string Path => LaxUtf8Marshaler.FromNative(delta->NewFile.Path);
 
         /// <summary>
         /// The new <see cref="Mode"/>.
         /// </summary>
-        public Mode Mode { get; }
+        public Mode Mode => (Mode)delta->NewFile.Mode;
 
         /// <summary>
         /// The new content hash.
         /// </summary>
-        //public ObjectId Oid { get; }
+        public ObjectId Oid => new ObjectId(RawOid);
+        
+        /// <summary>
+        /// The new raw content hash.
+        /// </summary>
+        public byte[] RawOid {
+            get {
+                var id = new byte[GitOid.Size];
+                Marshal.Copy((IntPtr)delta->NewFile.Id, id, 0, GitOid.Size);
+                return id;
+            }
+        }
 
         /// <summary>
         /// The kind of change that has been done (added, deleted, modified ...).
         /// </summary>
-        public ChangeKind Status { get; }
+        public ChangeKind Status => delta->Status;
 
         /// <summary>
         /// The old path.
         /// </summary>
-        public string OldPath { get; }
+        public string OldPath => LaxUtf8Marshaler.FromNative(delta->OldFile.Path);
+
+        /// <summary>
+        /// Returns whether the old path pointer points to the same string as the new path <seealso cref="OldPathIfRenamed"/>
+        /// </summary>
+        public bool PathChanged => delta->NewFile.Path != delta->OldFile.Path;
+
+        /// <summary>
+        /// Returns the old path if it is different from the current path otherwise returns null
+        /// </summary>
+        public string OldPathIfRenamed => PathChanged ? OldPath : null;
 
         /// <summary>
         /// The old <see cref="Mode"/>.
         /// </summary>
-        public Mode OldMode { get; }
+        public Mode OldMode => (Mode)delta->OldFile.Mode;
 
         /// <summary>
         /// The old content hash.
         /// </summary>
-        //public ObjectId OldOid => delta.OldFile.Id;
+        public ObjectId OldOid => new ObjectId(RawOldOid);
+        
+        /// <summary>
+        /// The raw old content hash.
+        /// </summary>
+        public byte[] RawOldOid
+        {
+            get
+            {
+                var id = new byte[GitOid.Size];
+                Marshal.Copy((IntPtr)delta->OldFile.Id, id, 0, GitOid.Size);
+                return id;
+            }
+        }
 
         private string DebuggerDisplay
         {

@@ -32,7 +32,7 @@ namespace LibGit2Sharp
             {
                 using (var patch = Proxy.git_patch_from_diff(diff, i))
                 {
-                    var delta = Proxy.git_diff_get_delta(diff, i);
+                    var delta = Proxy.git_diff_get_delta(diff, i).MarshalAs<GitDiffDelta>(false);
                     var pathPtr = delta.NewFile.Path != IntPtr.Zero ? delta.NewFile.Path : delta.OldFile.Path;
                     var newFilePath = LaxFilePathMarshaler.FromNative(pathPtr);
 
