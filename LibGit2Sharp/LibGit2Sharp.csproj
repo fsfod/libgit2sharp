@@ -71,6 +71,7 @@
     <Compile Include="CompareOptions.cs" />
     <Compile Include="Core\FileHistory.cs" />
     <Compile Include="Core\GitFetchOptions.cs" />
+    <Compile Include="Core\LibGit2Options.cs" />
     <Compile Include="Core\GitPushUpdate.cs" />
     <Compile Include="Core\Platform.cs" />
     <Compile Include="Core\Handles\ConflictIteratorSafeHandle.cs" />
@@ -88,6 +89,7 @@
     <Compile Include="EntryExistsException.cs" />
     <Compile Include="FetchOptionsBase.cs" />
     <Compile Include="Core\FetchPruneStrategy.cs" />
+    <Compile Include="LibGit2Options.cs" />
     <Compile Include="LogEntry.cs" />
     <Compile Include="FollowFilter.cs" />
     <Compile Include="IBelongToARepository.cs" />
