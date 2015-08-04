@@ -133,7 +133,13 @@ namespace LibGit2Sharp.Core
         private static void HandleError(int result)
         {
             string errorMessage;
-            GitError error = NativeMethods.giterr_last().MarshalAsGitError();
+            GitError error = null;
+            var errHandle = NativeMethods.giterr_last();
+
+            if (errHandle != null && !errHandle.IsInvalid)
+            {
+                error = errHandle.MarshalAsGitError();
+            }
 
             if (error == null)
             {
@@ -256,8 +262,8 @@ namespace LibGit2Sharp.Core
             }
 
             var message = string.Format(CultureInfo.InvariantCulture,
-                "No valid git object identified by '{0}' exists in the repository.",
-                identifier);
+                                        "No valid git object identified by '{0}' exists in the repository.",
+                                        identifier);
 
             if (string.Equals("HEAD", identifier, StringComparison.Ordinal))
             {

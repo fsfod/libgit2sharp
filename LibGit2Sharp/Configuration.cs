@@ -28,8 +28,12 @@ namespace LibGit2Sharp
         protected Configuration()
         { }
 
-        internal Configuration(Repository repository, string repositoryConfigurationFileLocation, string globalConfigurationFileLocation,
-            string xdgConfigurationFileLocation, string systemConfigurationFileLocation)
+        internal Configuration(
+            Repository repository,
+            string repositoryConfigurationFileLocation,
+            string globalConfigurationFileLocation,
+            string xdgConfigurationFileLocation,
+            string systemConfigurationFileLocation)
         {
             if (repositoryConfigurationFileLocation != null)
             {
@@ -120,8 +124,7 @@ namespace LibGit2Sharp
         /// </summary>
         /// <param name="repositoryConfigurationFileLocation">Path to an existing Repository configuration file.</param>
         /// <returns>An instance of <see cref="Configuration"/>.</returns>
-        public static Configuration BuildFrom(
-            string repositoryConfigurationFileLocation)
+        public static Configuration BuildFrom(string repositoryConfigurationFileLocation)
         {
             return BuildFrom(repositoryConfigurationFileLocation, null, null, null);
         }
@@ -227,7 +230,7 @@ namespace LibGit2Sharp
         /// </summary>
         public virtual bool HasConfig(ConfigurationLevel level)
         {
-            using (ConfigurationSafeHandle snapshot = Snapshot ())
+            using (ConfigurationSafeHandle snapshot = Snapshot())
             using (ConfigurationSafeHandle handle = RetrieveConfigurationHandle(level, false, snapshot))
             {
                 return handle != null;
@@ -288,6 +291,64 @@ namespace LibGit2Sharp
         protected virtual void Dispose(bool disposing)
         {
             configHandle.SafeDispose();
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts.
+        /// <para>
+        ///   For example in order to get the value for this in a .git\config file:
+        ///
+        ///   <code>
+        ///   [core]
+        ///   bare = true
+        ///   </code>
+        ///
+        ///   You would call:
+        ///
+        ///   <code>
+        ///   bool isBare = repo.Config.Get&lt;bool&gt;(new []{ "core", "bare" }).Value;
+        ///   </code>
+        /// </para>
+        /// </summary>
+        /// <typeparam name="T">The configuration value type</typeparam>
+        /// <param name="keyParts">The key parts</param>
+        /// <returns>The <see cref="ConfigurationEntry{T}"/>, or null if not set</returns>
+        public virtual ConfigurationEntry<T> Get<T>(string[] keyParts)
+        {
+            Ensure.ArgumentNotNull(keyParts, "keyParts");
+
+            return Get<T>(string.Join(".", keyParts));
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts.
+        /// <para>
+        ///   For example in order to get the value for this in a .git\config file:
+        ///
+        ///   <code>
+        ///   [difftool "kdiff3"]
+        ///     path = c:/Program Files/KDiff3/kdiff3.exe
+        ///   </code>
+        ///
+        ///   You would call:
+        ///
+        ///   <code>
+        ///   string where = repo.Config.Get&lt;string&gt;("difftool", "kdiff3", "path").Value;
+        ///   </code>
+        /// </para>
+        /// </summary>
+        /// <typeparam name="T">The configuration value type</typeparam>
+        /// <param name="firstKeyPart">The first key part</param>
+        /// <param name="secondKeyPart">The second key part</param>
+        /// <param name="thirdKeyPart">The third key part</param>
+        /// <returns>The <see cref="ConfigurationEntry{T}"/>, or null if not set</returns>
+        public virtual ConfigurationEntry<T> Get<T>(string firstKeyPart, string secondKeyPart, string thirdKeyPart)
+        {
+            Ensure.ArgumentNotNullOrEmptyString(firstKeyPart, "firstKeyPart");
+            Ensure.ArgumentNotNullOrEmptyString(secondKeyPart, "secondKeyPart");
+            Ensure.ArgumentNotNullOrEmptyString(thirdKeyPart, "thirdKeyPart");
+
+            return Get<T>(new[] { firstKeyPart, secondKeyPart, thirdKeyPart });
         }
 
         /// <summary>
@@ -364,6 +425,181 @@ namespace LibGit2Sharp
 
                 return Proxy.git_config_get_entry<T>(handle, key);
             }
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key</param>
+        /// <returns>The configuration value, or the default value for the selected <see typeparamref="T"/>if not found</returns>
+        public virtual T GetValueOrDefault<T>(string key)
+        {
+            return ValueOrDefault(Get<T>(key), default(T));
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key,
+        /// or <paramref name="defaultValue" /> if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key</param>
+        /// <param name="defaultValue">The default value if the key is not set.</param>
+        /// <returns>The configuration value, or the default value</returns>
+        public virtual T GetValueOrDefault<T>(string key, T defaultValue)
+        {
+            return ValueOrDefault(Get<T>(key), defaultValue);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key.</param>
+        /// <param name="level">The configuration file into which the key should be searched for.</param>
+        /// <returns>The configuration value, or the default value for <see typeparamref="T"/> if not found</returns>
+        public virtual T GetValueOrDefault<T>(string key, ConfigurationLevel level)
+        {
+            return ValueOrDefault(Get<T>(key, level), default(T));
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key,
+        /// or <paramref name="defaultValue" /> if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key.</param>
+        /// <param name="level">The configuration file into which the key should be searched for.</param>
+        /// <param name="defaultValue">The selector used to generate a default value if the key is not set.</param>
+        /// <returns>The configuration value, or the default value.</returns>
+        public virtual T GetValueOrDefault<T>(string key, ConfigurationLevel level, T defaultValue)
+        {
+            return ValueOrDefault(Get<T>(key, level), defaultValue);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="keyParts">The key parts.</param>
+        /// <returns>The configuration value, or the default value for<see typeparamref="T"/> if not found</returns>
+        public virtual T GetValueOrDefault<T>(string[] keyParts)
+        {
+            return ValueOrDefault(Get<T>(keyParts), default(T));
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts,
+        /// or <paramref name="defaultValue" /> if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="keyParts">The key parts.</param>
+        /// <param name="defaultValue">The default value if the key is not set.</param>
+        /// <returns>The configuration value, or the default value.</returns>
+        public virtual T GetValueOrDefault<T>(string[] keyParts, T defaultValue)
+        {
+            return ValueOrDefault(Get<T>(keyParts), defaultValue);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="firstKeyPart">The first key part.</param>
+        /// <param name="secondKeyPart">The second key part.</param>
+        /// <param name="thirdKeyPart">The third key part.</param>
+        /// <returns>The configuration value, or the default value for the selected <see typeparamref="T"/> if not found</returns>
+        public virtual T GetValueOrDefault<T>(string firstKeyPart, string secondKeyPart, string thirdKeyPart)
+        {
+            return ValueOrDefault(Get<T>(firstKeyPart, secondKeyPart, thirdKeyPart), default(T));
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts,
+        /// or <paramref name="defaultValue" /> if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="firstKeyPart">The first key part.</param>
+        /// <param name="secondKeyPart">The second key part.</param>
+        /// <param name="thirdKeyPart">The third key part.</param>
+        /// <param name="defaultValue">The default value if the key is not set.</param>
+        /// <returns>The configuration value, or the default.</returns>
+        public virtual T GetValueOrDefault<T>(string firstKeyPart, string secondKeyPart, string thirdKeyPart, T defaultValue)
+        {
+            return ValueOrDefault(Get<T>(firstKeyPart, secondKeyPart, thirdKeyPart), defaultValue);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key,
+        /// or a value generated by <paramref name="defaultValueSelector" />
+        /// if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key</param>
+        /// <param name="defaultValueSelector">The selector used to generate a default value if the key is not set.</param>
+        /// <returns>The configuration value, or a generated default.</returns>
+        public virtual T GetValueOrDefault<T>(string key, Func<T> defaultValueSelector)
+        {
+            return ValueOrDefault(Get<T>(key), defaultValueSelector);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key,
+        /// or a value generated by <paramref name="defaultValueSelector" />
+        /// if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="key">The key.</param>
+        /// <param name="level">The configuration file into which the key should be searched for.</param>
+        /// <param name="defaultValueSelector">The selector used to generate a default value if the key is not set.</param>
+        /// <returns>The configuration value, or a generated default.</returns>
+        public virtual T GetValueOrDefault<T>(string key, ConfigurationLevel level, Func<T> defaultValueSelector)
+        {
+            return ValueOrDefault(Get<T>(key, level), defaultValueSelector);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts,
+        /// or a value generated by <paramref name="defaultValueSelector" />
+        /// if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="keyParts">The key parts.</param>
+        /// <param name="defaultValueSelector">The selector used to generate a default value if the key is not set.</param>
+        /// <returns>The configuration value, or a generated default.</returns>
+        public virtual T GetValueOrDefault<T>(string[] keyParts, Func<T> defaultValueSelector)
+        {
+            return ValueOrDefault(Get<T>(keyParts), defaultValueSelector);
+        }
+
+        /// <summary>
+        /// Get a configuration value for the given key parts,
+        /// or a value generated by <paramref name="defaultValueSelector" />
+        /// if the key is not set.
+        /// </summary>
+        /// <typeparam name="T">The configuration value type.</typeparam>
+        /// <param name="firstKeyPart">The first key part.</param>
+        /// <param name="secondKeyPart">The second key part.</param>
+        /// <param name="thirdKeyPart">The third key part.</param>
+        /// <param name="defaultValueSelector">The selector used to generate a default value if the key is not set.</param>
+        /// <returns>The configuration value, or a generated default.</returns>
+        public virtual T GetValueOrDefault<T>(string firstKeyPart, string secondKeyPart, string thirdKeyPart, Func<T> defaultValueSelector)
+        {
+            return ValueOrDefault(Get<T>(firstKeyPart, secondKeyPart, thirdKeyPart), defaultValueSelector);
+        }
+
+        private static T ValueOrDefault<T>(ConfigurationEntry<T> value, T defaultValue)
+        {
+            return value == null ? defaultValue : value.Value;
+        }
+
+        private static T ValueOrDefault<T>(ConfigurationEntry<T> value, Func<T> defaultValueSelector)
+        {
+            Ensure.ArgumentNotNull(defaultValueSelector, "defaultValueSelector");
+
+            return value == null
+                       ? defaultValueSelector()
+                       : value.Value;
         }
 
         /// <summary>
@@ -457,9 +693,9 @@ namespace LibGit2Sharp
 
             if (handle == null && throwIfStoreHasNotBeenFound)
             {
-                throw new LibGit2SharpException(
-                    string.Format(CultureInfo.InvariantCulture, "No {0} configuration file has been found.",
-                    Enum.GetName(typeof(ConfigurationLevel), level)));
+                throw new LibGit2SharpException(string.Format(CultureInfo.InvariantCulture,
+                                                              "No {0} configuration file has been found.",
+                                                              Enum.GetName(typeof(ConfigurationLevel), level)));
             }
 
             return handle;
@@ -532,14 +768,20 @@ namespace LibGit2Sharp
         {
             const string userNameKey = "user.name";
             var name = this.GetValueOrDefault<string>(userNameKey);
-            var normalizedName = NormalizeUserSetting(shouldThrowIfNotFound, userNameKey, name,
-                () => "unknown");
+            var normalizedName = NormalizeUserSetting(shouldThrowIfNotFound,
+                                                      userNameKey,
+                                                      name,
+                                                      () => "unknown");
 
             const string userEmailKey = "user.email";
             var email = this.GetValueOrDefault<string>(userEmailKey);
-            var normalizedEmail = NormalizeUserSetting(shouldThrowIfNotFound, userEmailKey, email,
-                () => string.Format(
-                    CultureInfo.InvariantCulture, "{0}@{1}", Environment.UserName, Environment.UserDomainName));
+            var normalizedEmail = NormalizeUserSetting(shouldThrowIfNotFound,
+                                                       userEmailKey,
+                                                       email,
+                                                       () => string.Format(CultureInfo.InvariantCulture,
+                                                                           "{0}@{1}",
+                                                                           Environment.UserName,
+                                                                           Environment.UserDomainName));
 
             return new Signature(normalizedName, normalizedEmail, now);
         }

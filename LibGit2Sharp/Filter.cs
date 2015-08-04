@@ -15,14 +15,9 @@ namespace LibGit2Sharp
     public abstract class Filter : IEquatable<Filter>
     {
         private static readonly LambdaEqualityHelper<Filter> equalityHelper =
-        new LambdaEqualityHelper<Filter>(x => x.Name, x => x.Attributes);
+            new LambdaEqualityHelper<Filter>(x => x.Name, x => x.Attributes);
         // 64K is optimal buffer size per https://technet.microsoft.com/en-us/library/cc938632.aspx
         private const int BufferSize = 64 * 1024;
-
-        private readonly string name;
-        private readonly IEnumerable<FilterAttributeEntry> attributes;
-
-        private readonly GitFilter gitFilter;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Filter"/> class.
@@ -46,6 +41,18 @@ namespace LibGit2Sharp
                 stream = StreamCreateCallback,
             };
         }
+        /// <summary>
+        /// Finalizer called by the <see cref="GC"/>, deregisters and frees native memory associated with the registered filter in libgit2.
+        /// </summary>
+        ~Filter()
+        {
+            GlobalSettings.DeregisterFilter(this);
+        }
+
+        private readonly string name;
+        private readonly IEnumerable<FilterAttributeEntry> attributes;
+        private readonly GitFilter gitFilter;
+        private readonly object @lock = new object();
 
         private GitWriteStream thisStream;
         private GitWriteStream nextStream;
@@ -103,6 +110,16 @@ namespace LibGit2Sharp
         /// that doesn't need the filter.
         /// </summary>
         protected virtual void Initialize()
+        { }
+
+        /// <summary>
+        /// Indicates that a filter is going to be applied for the given file for
+        /// the given mode.
+        /// </summary>
+        /// <param name="path">The path of the file being filtered</param>
+        /// <param name="root">The path of the working directory for the owning repository</param>
+        /// <param name="mode">The filter mode</param>
+        protected virtual void Create(string path, string root, FilterMode mode)
         { }
 
         /// <summary>
@@ -227,6 +244,8 @@ namespace LibGit2Sharp
                 Marshal.PtrToStructure(nextPtr, nextStream);
                 filterSource = FilterSource.FromNativePtr(filterSourcePtr);
                 output = new WriteStream(nextStream, nextPtr);
+
+                Create(filterSource.Path, filterSource.Root, filterSource.SourceMode);
             }
             catch (Exception exception)
             {
@@ -301,7 +320,6 @@ namespace LibGit2Sharp
                 Ensure.ArgumentNotZeroIntPtr(buffer, "buffer");
                 Ensure.ArgumentIsExpectedIntPtr(stream, thisPtr, "stream");
 
-                string tempFileName = Path.GetTempFileName();
                 using (UnmanagedMemoryStream input = new UnmanagedMemoryStream((byte*)buffer.ToPointer(), (long)len))
                 using (BufferedStream outputBuffer = new BufferedStream(output, BufferSize))
                 {
@@ -320,9 +338,6 @@ namespace LibGit2Sharp
                             return (int)GitErrorCode.Ambiguous;
                     }
                 }
-
-                // clean up after outselves
-                File.Delete(tempFileName);
             }
             catch (Exception exception)
             {

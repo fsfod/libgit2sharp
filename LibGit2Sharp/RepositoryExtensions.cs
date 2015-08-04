@@ -357,7 +357,8 @@ namespace LibGit2Sharp
             {
                 throw new ArgumentException(string.Format(CultureInfo.InvariantCulture,
                                                           "Unable to process file '{0}'. This file is not located under the working directory of the repository ('{1}').",
-                                                          normalizedPath, repo.Info.WorkingDirectory));
+                                                          normalizedPath, 
+                                                          repo.Info.WorkingDirectory));
             }
 
             return normalizedPath.Substring(repo.Info.WorkingDirectory.Length);
@@ -466,7 +467,7 @@ namespace LibGit2Sharp
 
             if (throwIfNotFound)
             {
-                throw new LibGit2SharpException(string.Format(CultureInfo.InvariantCulture, "Unexpected kind of identifier '{0}'.", identifier));
+                throw new LibGit2SharpException(CultureInfo.InvariantCulture, "Unexpected kind of identifier '{0}'.", identifier);
             }
 
             yield return null;

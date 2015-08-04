@@ -31,6 +31,7 @@ namespace LibGit2Sharp
         private readonly NoteCollection notes;
         private readonly Lazy<ObjectDatabase> odb;
         private readonly Lazy<Network> network;
+        private readonly Lazy<Rebase> rebaseOperation;
         private readonly Stack<IDisposable> toCleanup = new Stack<IDisposable>();
         private readonly Ignore ignore;
         private readonly SubmoduleCollection submodules;
@@ -82,8 +83,7 @@ namespace LibGit2Sharp
 
                     if (isBare && (isWorkDirNull ^ isIndexNull))
                     {
-                        throw new ArgumentException(
-                            "When overriding the opening of a bare repository, both RepositoryOptions.WorkingDirectoryPath an RepositoryOptions.IndexPath have to be provided.");
+                        throw new ArgumentException("When overriding the opening of a bare repository, both RepositoryOptions.WorkingDirectoryPath an RepositoryOptions.IndexPath have to be provided.");
                     }
 
                     if (!isWorkDirNull)
@@ -122,16 +122,17 @@ namespace LibGit2Sharp
                 tags = new TagCollection(this);
                 stashes = new StashCollection(this);
                 info = new Lazy<RepositoryInformation>(() => new RepositoryInformation(this, isBare));
-                config =
-                    new Lazy<Configuration>(
-                        () =>
-                        RegisterForCleanup(new Configuration(this, null, configurationGlobalFilePath, configurationXDGFilePath,
-                                                             configurationSystemFilePath)));
+                config = new Lazy<Configuration>(() => RegisterForCleanup(new Configuration(this,
+                                                                                            null,
+                                                                                            configurationGlobalFilePath,
+                                                                                            configurationXDGFilePath,
+                                                                                            configurationSystemFilePath)));
                 odb = new Lazy<ObjectDatabase>(() => new ObjectDatabase(this));
                 diff = new Diff(this);
                 notes = new NoteCollection(this);
                 ignore = new Ignore(this);
                 network = new Lazy<Network>(() => new Network(this));
+                rebaseOperation = new Lazy<Rebase>(() => new Rebase(this));
                 pathCase = new Lazy<PathCase>(() => new PathCase(this));
                 submodules = new SubmoduleCollection(this);
 
@@ -154,7 +155,12 @@ namespace LibGit2Sharp
         /// <returns>True if a repository can be resolved through this path; false otherwise</returns>
         static public bool IsValid(string path)
         {
-            Ensure.ArgumentNotNullOrEmptyString(path, "path");
+            Ensure.ArgumentNotNull(path, "path");
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
 
             try
             {
@@ -255,10 +261,7 @@ namespace LibGit2Sharp
         /// </summary>
         public Ignore Ignore
         {
-            get
-            {
-                return ignore;
-            }
+            get { return ignore; }
         }
 
         /// <summary>
@@ -266,9 +269,17 @@ namespace LibGit2Sharp
         /// </summary>
         public Network Network
         {
+            get { return network.Value; }
+        }
+
+        /// <summary>
+        /// Provides access to rebase functionality for a repository.
+        /// </summary>
+        public Rebase Rebase
+        {
             get
             {
-                return network.Value;
+                return rebaseOperation.Value;
             }
         }
 
@@ -277,10 +288,7 @@ namespace LibGit2Sharp
         /// </summary>
         public ObjectDatabase ObjectDatabase
         {
-            get
-            {
-                return odb.Value;
-            }
+            get { return odb.Value; }
         }
 
         /// <summary>
@@ -530,8 +538,7 @@ namespace LibGit2Sharp
 
             if (lookUpOptions.HasFlag(LookUpOptions.DereferenceResultToCommit))
             {
-                return obj.DereferenceToCommit(
-                    lookUpOptions.HasFlag(LookUpOptions.ThrowWhenCanNotBeDereferencedToACommit));
+                return obj.DereferenceToCommit(lookUpOptions.HasFlag(LookUpOptions.ThrowWhenCanNotBeDereferencedToACommit));
             }
 
             return obj;
@@ -539,10 +546,11 @@ namespace LibGit2Sharp
 
         internal Commit LookupCommit(string committish)
         {
-            return (Commit)Lookup(committish, GitObjectType.Any,
-                LookUpOptions.ThrowWhenNoGitObjectHasBeenFound |
-                LookUpOptions.DereferenceResultToCommit |
-                LookUpOptions.ThrowWhenCanNotBeDereferencedToACommit);
+            return (Commit)Lookup(committish,
+                                  GitObjectType.Any,
+                                  LookUpOptions.ThrowWhenNoGitObjectHasBeenFound |
+                                  LookUpOptions.DereferenceResultToCommit |
+                                  LookUpOptions.ThrowWhenCanNotBeDereferencedToACommit);
         }
 
         /// <summary>
@@ -555,7 +563,7 @@ namespace LibGit2Sharp
         /// </para>
         /// <param name="url">The url to list from.</param>
         /// <returns>The references in the remote repository.</returns>
-        public static IEnumerable<DirectReference> ListRemoteReferences(string url)
+        public static IEnumerable<Reference> ListRemoteReferences(string url)
         {
             return ListRemoteReferences(url, null);
         }
@@ -571,7 +579,7 @@ namespace LibGit2Sharp
         /// <param name="url">The url to list from.</param>
         /// <param name="credentialsProvider">The <see cref="Func{Credentials}"/> used to connect to remote repository.</param>
         /// <returns>The references in the remote repository.</returns>
-        public static IEnumerable<DirectReference> ListRemoteReferences(string url, CredentialsHandler credentialsProvider)
+        public static IEnumerable<Reference> ListRemoteReferences(string url, CredentialsHandler credentialsProvider)
         {
             Ensure.ArgumentNotNull(url, "url");
 
@@ -657,7 +665,7 @@ namespace LibGit2Sharp
             bool continueOperation = OnRepositoryOperationStarting(options.RepositoryOperationStarting,
                                                                    context);
 
-            if(!continueOperation)
+            if (!continueOperation)
             {
                 throw new UserCancelledException("Clone cancelled by the user.");
             }
@@ -704,10 +712,9 @@ namespace LibGit2Sharp
                 }
                 catch (Exception ex)
                 {
-                    throw new RecurseSubmodulesException(
-                        "The top level repository was cloned, but there was an error cloning its submodules.",
-                        ex,
-                        clonedRepoPath);
+                    throw new RecurseSubmodulesException("The top level repository was cloned, but there was an error cloning its submodules.",
+                                                         ex,
+                                                         clonedRepoPath);
                 }
 
                 return clonedRepoPath;
@@ -790,8 +797,9 @@ namespace LibGit2Sharp
         /// <param name="repositoryChangedCallback">The callback to notify change.</param>
         /// <param name="context">Context of the repository this operation affects.</param>
         /// <returns>true to continue the operation, false to cancel.</returns>
-        private static bool OnRepositoryOperationStarting(RepositoryOperationStarting repositoryChangedCallback,
-                                                          RepositoryOperationContext context)
+        private static bool OnRepositoryOperationStarting(
+            RepositoryOperationStarting repositoryChangedCallback,
+            RepositoryOperationContext context)
         {
             bool continueOperation = true;
             if (repositoryChangedCallback != null)
@@ -802,8 +810,9 @@ namespace LibGit2Sharp
             return continueOperation;
         }
 
-        private static void OnRepositoryOperationCompleted(RepositoryOperationCompleted repositoryChangedCallback,
-                                                           RepositoryOperationContext context)
+        private static void OnRepositoryOperationCompleted(
+            RepositoryOperationCompleted repositoryChangedCallback,
+            RepositoryOperationContext context)
         {
             if (repositoryChangedCallback != null)
             {
@@ -851,15 +860,17 @@ namespace LibGit2Sharp
                 if (!refH.IsInvalid)
                 {
                     var reference = Reference.BuildFromPtr<Reference>(refH, this);
-                    if (reference.IsLocalBranch())
+                    if (reference.IsLocalBranch)
                     {
                         Branch branch = Branches[reference.CanonicalName];
                         return Checkout(branch, options);
                     }
                 }
 
-                obj = GitObject.BuildFrom(this, Proxy.git_object_id(objH), Proxy.git_object_type(objH),
-                                              PathFromRevparseSpec(committishOrBranchSpec));
+                obj = GitObject.BuildFrom(this,
+                                          Proxy.git_object_id(objH),
+                                          Proxy.git_object_type(objH),
+                                          PathFromRevparseSpec(committishOrBranchSpec));
             }
             finally
             {
@@ -889,9 +900,9 @@ namespace LibGit2Sharp
             // Make sure this is not an unborn branch.
             if (branch.Tip == null)
             {
-                throw new UnbornBranchException(
-                    string.Format(CultureInfo.InvariantCulture,
-                    "The tip of branch '{0}' is null. There's nothing to checkout.", branch.FriendlyName));
+                throw new UnbornBranchException(CultureInfo.InvariantCulture,
+                                                "The tip of branch '{0}' is null. There's nothing to checkout.",
+                                                branch.FriendlyName);
             }
 
             if (!branch.IsRemote && !(branch is DetachedHead) &&
@@ -956,7 +967,7 @@ namespace LibGit2Sharp
             IConvertableToGitCheckoutOpts opts)
         {
 
-            using(GitCheckoutOptsWrapper checkoutOptionsWrapper = new GitCheckoutOptsWrapper(opts, ToFilePaths(paths)))
+            using (GitCheckoutOptsWrapper checkoutOptionsWrapper = new GitCheckoutOptsWrapper(opts, ToFilePaths(paths)))
             {
                 var options = checkoutOptionsWrapper.Options;
                 Proxy.git_checkout_tree(Handle, tree.Id, ref options);
@@ -1119,7 +1130,7 @@ namespace LibGit2Sharp
                     return;
                 }
 
-                var symRef = (SymbolicReference) reference;
+                var symRef = (SymbolicReference)reference;
 
                 reference = symRef.Target;
 
@@ -1478,7 +1489,7 @@ namespace LibGit2Sharp
             FastForwardStrategy fastForwardStrategy = (options.FastForwardStrategy != FastForwardStrategy.Default) ?
                 options.FastForwardStrategy : FastForwardStrategyFromMergePreference(mergePreference);
 
-            switch(fastForwardStrategy)
+            switch (fastForwardStrategy)
             {
                 case FastForwardStrategy.Default:
                     if (mergeAnalysis.HasFlag(GitMergeAnalysis.GIT_MERGE_ANALYSIS_FASTFORWARD))
@@ -1544,16 +1555,15 @@ namespace LibGit2Sharp
         private MergeResult NormalMerge(GitAnnotatedCommitHandle[] annotatedCommits, Signature merger, MergeOptions options)
         {
             MergeResult mergeResult;
-
             var mergeOptions = new GitMergeOpts
-                {
-                    Version = 1,
-                    MergeFileFavorFlags = options.MergeFileFavor,
-                    MergeTreeFlags = options.FindRenames ? GitMergeTreeFlags.GIT_MERGE_TREE_FIND_RENAMES :
-                                                           GitMergeTreeFlags.GIT_MERGE_TREE_NORMAL,
-                    RenameThreshold = (uint) options.RenameThreshold,
-                    TargetLimit = (uint) options.TargetLimit,
-                };
+            {
+                Version = 1,
+                MergeFileFavorFlags = options.MergeFileFavor,
+                MergeTreeFlags = options.FindRenames ? GitMergeTreeFlags.GIT_MERGE_TREE_FIND_RENAMES
+                                                     : GitMergeTreeFlags.GIT_MERGE_TREE_NORMAL,
+                RenameThreshold = (uint)options.RenameThreshold,
+                TargetLimit = (uint)options.TargetLimit,
+            };
 
             using (GitCheckoutOptsWrapper checkoutOptionsWrapper = new GitCheckoutOptsWrapper(options))
             {
@@ -1590,7 +1600,7 @@ namespace LibGit2Sharp
         private MergeResult FastForwardMerge(GitAnnotatedCommitHandle annotatedCommit, MergeOptions options)
         {
             ObjectId id = Proxy.git_annotated_commit_id(annotatedCommit);
-            Commit fastForwardCommit = (Commit) Lookup(id, ObjectType.Commit);
+            Commit fastForwardCommit = (Commit)Lookup(id, ObjectType.Commit);
             Ensure.GitObjectIsNotNull(fastForwardCommit, id.Sha);
 
             CheckoutTree(fastForwardCommit.Tree, null, new FastForwardCheckoutOptionsAdapter(options));
@@ -1848,7 +1858,10 @@ namespace LibGit2Sharp
                 FileStatus sourceStatus = keyValuePair.Key.Item2;
                 if (sourceStatus.HasAny(new Enum[] { FileStatus.Nonexistent, FileStatus.DeletedFromIndex, FileStatus.NewInWorkdir, FileStatus.DeletedFromWorkdir }))
                 {
-                    throw new LibGit2SharpException(string.Format(CultureInfo.InvariantCulture, "Unable to move file '{0}'. Its current status is '{1}'.", sourcePath, sourceStatus));
+                    throw new LibGit2SharpException(CultureInfo.InvariantCulture,
+                                                    "Unable to move file '{0}'. Its current status is '{1}'.",
+                                                    sourcePath,
+                                                    sourceStatus);
                 }
 
                 FileStatus desStatus = keyValuePair.Value.Item2;
@@ -1857,7 +1870,10 @@ namespace LibGit2Sharp
                     continue;
                 }
 
-                throw new LibGit2SharpException(string.Format(CultureInfo.InvariantCulture, "Unable to overwrite file '{0}'. Its current status is '{1}'.", destPath, desStatus));
+                throw new LibGit2SharpException(CultureInfo.InvariantCulture,
+                                                "Unable to overwrite file '{0}'. Its current status is '{1}'.",
+                                                destPath,
+                                                desStatus);
             }
 
             string wd = Info.WorkingDirectory;
@@ -2088,10 +2104,11 @@ namespace LibGit2Sharp
                     case ChangeKind.Unmodified:
                         if (removeFromWorkingDirectory && (
                             status.HasFlag(FileStatus.ModifiedInIndex) ||
-                            status.HasFlag(FileStatus.NewInIndex) ))
+                            status.HasFlag(FileStatus.NewInIndex)))
                         {
-                            throw new RemoveFromIndexException(string.Format(CultureInfo.InvariantCulture, "Unable to remove file '{0}', as it has changes staged in the index. You can call the Remove() method with removeFromWorkingDirectory=false if you want to remove it from the index only.",
-                                treeEntryChanges.Path));
+                            throw new RemoveFromIndexException(CultureInfo.InvariantCulture,
+                                                               "Unable to remove file '{0}', as it has changes staged in the index. You can call the Remove() method with removeFromWorkingDirectory=false if you want to remove it from the index only.",
+                                                               treeEntryChanges.Path);
                         }
                         removed.Add(RemoveFromIndex(treeEntryChanges.Path));
                         continue;
@@ -2099,20 +2116,24 @@ namespace LibGit2Sharp
                     case ChangeKind.Modified:
                         if (status.HasFlag(FileStatus.ModifiedInWorkdir) && status.HasFlag(FileStatus.ModifiedInIndex))
                         {
-                            throw new RemoveFromIndexException(string.Format(CultureInfo.InvariantCulture, "Unable to remove file '{0}', as it has staged content different from both the working directory and the HEAD.",
-                                treeEntryChanges.Path));
+                            throw new RemoveFromIndexException(CultureInfo.InvariantCulture,
+                                                               "Unable to remove file '{0}', as it has staged content different from both the working directory and the HEAD.",
+                                                               treeEntryChanges.Path);
                         }
                         if (removeFromWorkingDirectory)
                         {
-                            throw new RemoveFromIndexException(string.Format(CultureInfo.InvariantCulture, "Unable to remove file '{0}', as it has local modifications. You can call the Remove() method with removeFromWorkingDirectory=false if you want to remove it from the index only.",
-                                treeEntryChanges.Path));
+                            throw new RemoveFromIndexException(CultureInfo.InvariantCulture,
+                                                               "Unable to remove file '{0}', as it has local modifications. You can call the Remove() method with removeFromWorkingDirectory=false if you want to remove it from the index only.",
+                                                               treeEntryChanges.Path);
                         }
                         removed.Add(RemoveFromIndex(treeEntryChanges.Path));
                         continue;
 
                     default:
-                        throw new RemoveFromIndexException(string.Format(CultureInfo.InvariantCulture, "Unable to remove file '{0}'. Its current status is '{1}'.",
-                            treeEntryChanges.Path, treeEntryChanges.Status));
+                        throw new RemoveFromIndexException(CultureInfo.InvariantCulture,
+                                                           "Unable to remove file '{0}'. Its current status is '{1}'.",
+                                                           treeEntryChanges.Path,
+                                                           treeEntryChanges.Status);
                 }
             }
 
@@ -2148,9 +2169,9 @@ namespace LibGit2Sharp
             get
             {
                 return string.Format(CultureInfo.InvariantCulture,
-                    "{0} = \"{1}\"",
-                    Info.IsBare ? "Gitdir" : "Workdir",
-                    Info.IsBare ? Info.Path : Info.WorkingDirectory);
+                                     "{0} = \"{1}\"",
+                                     Info.IsBare ? "Gitdir" : "Workdir",
+                                     Info.IsBare ? Info.Path : Info.WorkingDirectory);
             }
         }
     }
