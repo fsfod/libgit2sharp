@@ -18,6 +18,8 @@ namespace LibGit2Sharp
         internal DirectReference(string canonicalName, IRepository repo, ObjectId targetId)
             : base(repo, canonicalName, targetId.Sha)
         {
+            Id = targetId;
+
             targetBuilder = new Lazy<GitObject>(() =>
             {
                 if (repo == null)
@@ -28,6 +30,11 @@ namespace LibGit2Sharp
                 return repo.Lookup(targetId);
             });
         }
+
+        /// <summary>
+        /// The Id of the object pointed to
+        /// </summary>
+        public ObjectId Id { get; }
 
         /// <summary>
         /// Gets the target of this <see cref="DirectReference"/>

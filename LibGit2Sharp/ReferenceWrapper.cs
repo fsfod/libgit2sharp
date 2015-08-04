@@ -6,42 +6,48 @@ using LibGit2Sharp.Core;
 namespace LibGit2Sharp
 {
     /// <summary>
-    /// A base class for things that wrap a <see cref="Reference"/> (branch, tag, etc).
+    ///
     /// </summary>
-    /// <typeparam name="TObject">The type of the referenced Git object.</typeparam>
-    [DebuggerDisplay("{DebuggerDisplay,nq}")]
-    public abstract class ReferenceWrapper<TObject> : IEquatable<ReferenceWrapper<TObject>>, IBelongToARepository where TObject : GitObject
+    public abstract class BaseReferenceWrapper : IBelongToARepository, IEquatable<BaseReferenceWrapper>
     {
+        private static readonly LambdaEqualityHelper<BaseReferenceWrapper> equalityHelper =
+            new LambdaEqualityHelper<BaseReferenceWrapper>(x => x.CanonicalName, x => x.TargetObject);
+
         /// <summary>
         /// The repository.
         /// </summary>
         protected readonly Repository repo;
-        private readonly Lazy<TObject> objectBuilder;
-
-        private static readonly LambdaEqualityHelper<ReferenceWrapper<TObject>> equalityHelper =
-            new LambdaEqualityHelper<ReferenceWrapper<TObject>>(x => x.CanonicalName, x => x.TargetObject);
-
         private readonly string canonicalName;
+        private readonly Lazy<GitObject> objectBuilder;
 
         /// <summary>
         /// Needed for mocking purposes.
         /// </summary>
-        protected ReferenceWrapper()
+        protected BaseReferenceWrapper()
         { }
 
-        /// <param name="repo">The repository.</param>
-        /// <param name="reference">The reference.</param>
-        /// <param name="canonicalNameSelector">A function to construct the reference's canonical name.</param>
-        protected internal ReferenceWrapper(Repository repo, Reference reference, Func<Reference, string> canonicalNameSelector)
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="repo"></param>
+        /// <param name="reference"></param>
+        /// <param name="canonicalNameSelector"></param>
+        protected internal BaseReferenceWrapper(Repository repo, Reference reference, Func<Reference, string> canonicalNameSelector)
         {
             Ensure.ArgumentNotNull(repo, "repo");
             Ensure.ArgumentNotNull(reference, "reference");
             Ensure.ArgumentNotNull(canonicalNameSelector, "canonicalNameSelector");
 
             this.repo = repo;
+            Reference = reference;
             canonicalName = canonicalNameSelector(reference);
-            objectBuilder = new Lazy<TObject>(() => RetrieveTargetObject(reference));
+            this.objectBuilder = new Lazy<GitObject>(RetrieveTargetObject);
         }
+
+        /// <summary>
+        ///
+        /// </summary>
+        public Reference Reference { get;}
 
         /// <summary>
         /// Gets the full name of this reference.
@@ -60,13 +66,9 @@ namespace LibGit2Sharp
         }
 
         /// <summary>
-        /// Gets the name of this reference.
+        /// The current id of the object the reference points to
         /// </summary>
-        [Obsolete("This property will be removed in the next release. Please use FriendlyName instead.")]
-        public virtual string Name
-        {
-            get { return FriendlyName; }
-        }
+        public ObjectId CurrentId => Reference.ResolveToDirectReference().Id;
 
         /// <summary>
         /// Returns the <see cref="CanonicalName"/>, a <see cref="string"/> representation of the current reference.
@@ -78,23 +80,20 @@ namespace LibGit2Sharp
         }
 
         /// <summary>
-        /// Gets the <typeparamref name="TObject"/> this <see cref="ReferenceWrapper{TObject}"/> points to.
+        /// Gets the Object this <see cref="ReferenceWrapper{TObject}"/> points to.
         /// </summary>
-        protected TObject TargetObject
+        public GitObject TargetObject
         {
             get { return objectBuilder.Value; }
         }
 
         /// <summary>
-        /// Removes redundent leading namespaces (regarding the kind of
-        /// reference being wrapped) from the canonical name.
+        /// creates the Object this ReferenceWrapper points to.
         /// </summary>
-        /// <returns>The friendly shortened name</returns>
-        protected abstract string Shorten();
-
-        private TObject RetrieveTargetObject(Reference reference)
+        /// <returns></returns>
+        protected virtual GitObject RetrieveTargetObject()
         {
-            var directReference = reference.ResolveToDirectReference();
+            var directReference = Reference.ResolveToDirectReference();
             if (directReference == null)
             {
                 return null;
@@ -106,15 +105,23 @@ namespace LibGit2Sharp
                 return null;
             }
 
-            return repo.Lookup<TObject>(target.Id);
+            return repo.Lookup(target.Id);
         }
+
+        /// <summary>
+        /// Removes redundent leading namespaces (regarding the kind of
+        /// reference being wrapped) from the canonical name.
+        /// </summary>
+        /// <returns>The friendly shortened name</returns>
+        protected abstract string Shorten();
+
 
         /// <summary>
         /// Determines whether the specified <see cref="ReferenceWrapper{TObject}"/> is equal to the current <see cref="ReferenceWrapper{TObject}"/>.
         /// </summary>
         /// <param name="other">The <see cref="ReferenceWrapper{TObject}"/> to compare with the current <see cref="ReferenceWrapper{TObject}"/>.</param>
         /// <returns>True if the specified <see cref="ReferenceWrapper{TObject}"/> is equal to the current <see cref="ReferenceWrapper{TObject}"/>; otherwise, false.</returns>
-        public bool Equals(ReferenceWrapper<TObject> other)
+        public bool Equals(BaseReferenceWrapper other)
         {
             return equalityHelper.Equals(this, other);
         }
@@ -126,7 +133,7 @@ namespace LibGit2Sharp
         /// <returns>True if the specified <see cref="Object"/> is equal to the current <see cref="ReferenceWrapper{TObject}"/>; otherwise, false.</returns>
         public override bool Equals(object obj)
         {
-            return Equals(obj as ReferenceWrapper<TObject>);
+            return Equals(obj as BaseReferenceWrapper);
         }
 
         /// <summary>
@@ -144,7 +151,7 @@ namespace LibGit2Sharp
         /// <param name="left">First <see cref="ReferenceWrapper{TObject}"/> to compare.</param>
         /// <param name="right">Second <see cref="ReferenceWrapper{TObject}"/> to compare.</param>
         /// <returns>True if the two objects are equal; false otherwise.</returns>
-        public static bool operator ==(ReferenceWrapper<TObject> left, ReferenceWrapper<TObject> right)
+        public static bool operator ==(BaseReferenceWrapper left, BaseReferenceWrapper right)
         {
             return Equals(left, right);
         }
@@ -155,9 +162,72 @@ namespace LibGit2Sharp
         /// <param name="left">First <see cref="ReferenceWrapper{TObject}"/> to compare.</param>
         /// <param name="right">Second <see cref="ReferenceWrapper{TObject}"/> to compare.</param>
         /// <returns>True if the two objects are different; false otherwise.</returns>
-        public static bool operator !=(ReferenceWrapper<TObject> left, ReferenceWrapper<TObject> right)
+        public static bool operator !=(BaseReferenceWrapper left, BaseReferenceWrapper right)
         {
             return !Equals(left, right);
+        }
+
+        IRepository IBelongToARepository.Repository => repo;
+    }
+
+    /// <summary>
+    /// A base class for things that wrap a <see cref="Reference"/> (branch, tag, etc).
+    /// </summary>
+    /// <typeparam name="TObject">The type of the referenced Git object.</typeparam>
+    [DebuggerDisplay("{DebuggerDisplay,nq}")]
+    public abstract class ReferenceWrapper<TObject> : BaseReferenceWrapper where TObject : GitObject
+    {
+
+        /// <summary>
+        /// Needed for mocking purposes.
+        /// </summary>
+        protected ReferenceWrapper()
+        { }
+
+        /// <param name="repo">The repository.</param>
+        /// <param name="reference">The reference.</param>
+        /// <param name="canonicalNameSelector">A function to construct the reference's canonical name.</param>
+        protected internal ReferenceWrapper(Repository repo, Reference reference, Func<Reference, string> canonicalNameSelector)
+            :base(repo, reference, canonicalNameSelector)
+        {
+        }
+
+        /// <summary>
+        /// Gets the name of this reference.
+        /// </summary>
+        [Obsolete("This property will be removed in the next release. Please use FriendlyName instead.")]
+        public virtual string Name
+        {
+            get { return FriendlyName; }
+        }
+
+        /// <summary>
+        /// Gets the <typeparamref name="TObject"/> this <see cref="ReferenceWrapper{TObject}"/> points to.
+        /// </summary>
+        protected new TObject TargetObject
+        {
+            get { return (TObject)base.TargetObject; }
+        }
+
+        /// <summary>
+        ///
+        /// </summary>
+        /// <returns></returns>
+        protected override GitObject RetrieveTargetObject()
+        {
+            var directReference = Reference.ResolveToDirectReference();
+            if (directReference == null)
+            {
+                return null;
+            }
+
+            var target = directReference.Target;
+            if (target == null)
+            {
+                return null;
+            }
+
+            return repo.Lookup<TObject>(target.Id);
         }
 
         private string DebuggerDisplay
@@ -166,12 +236,10 @@ namespace LibGit2Sharp
             {
                 return string.Format(CultureInfo.InvariantCulture,
                                      "{0} => \"{1}\"", CanonicalName,
-                                     (TargetObject != null) 
-                                        ? TargetObject.Id.ToString(7) 
+                                     (TargetObject != null)
+                                        ? TargetObject.Id.ToString(7)
                                         : "?");
             }
         }
-
-        IRepository IBelongToARepository.Repository { get { return repo; } }
     }
 }
